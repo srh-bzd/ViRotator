@@ -1,0 +1,315 @@
+#!/bin/bash
+
+<<COMMENT
+	USAGE : 
+		./ViRotator -f input_directory -o output_directory [-t <files-type>] [-d <data>]
+	DESCRIPTION : 
+		ViRotator is a pipeline that reverse-complement the sequences on the minus strand thanks to an alignment against a reference genome 
+		and then rotate all the sequences thanks this time to an alignment against a reference gene
+	PREREQUISITE :
+		* Files :
+			- A directory with a reference genome used to know the strand of sequences (*genome.fasta) and a reference gene used to initiate the rotation (*gene.fasta)
+			- python scripts used into this pipeline (rev_comp.py, triple.py and rotate.py)
+		* Tools :
+			- Python3 
+			- Blast (https://www.ncbi.nlm.nih.gov/books/NBK279690/)
+		* Python package :
+			- argparse
+	AUTHOR :
+        Sarah BOUZIDI
+        Engineer in bioinformatics
+        Centre National de la Recherche Scientifique (CNRS)
+        Laboratory MIVEGEC, IRD, Montpellier
+COMMENT
+
+
+# Exit if a command exits with a non zero status
+set -e
+
+
+
+########################################################################################
+#                                    DEFINE VARIABLES 
+########################################################################################
+
+# Directory of supplementary scripts
+DIRSCRIPTS="$(dirname $0)"/src
+
+# Directory of data
+DIRDATA="$(dirname $0)"/data
+
+# Data by default used
+DATA="hpv16"
+
+# File type by default
+FILESTYPE="fasta"
+
+
+
+########################################################################################
+#                                    PARSE COMMAND LINE
+########################################################################################
+
+# Function to print the header in the shell
+function header(){
+    printf "ViRotator\n"
+    printf "2024 - Sarah Bouzidi <sarah.bouzidi@ird.fr>\n"
+}
+
+### USAGE OF THE PIPELINE
+function usage(){
+    headern 
+    printf "\nUsage :\n"
+	printf "./ViRotator -f <input_directory> -d <data> -o <output_directory> [-t <files-type>]\n"
+    
+    printf "\nAbout :\n"
+    printf "ViRotator is a pipeline that reverse-complement the sequences on the minus strand thanks to an alignment against a reference genome and then rotate all the sequences thanks this time to an alignment against a reference gene\n"
+	
+    printf "\nPrerequisite :\n"
+    printf "\t- Blast (https://www.ncbi.nlm.nih.gov/books/NBK279690/)\n"
+    printf "\t- Python3 (https://www.python.org/downloads/)\n"
+    
+    printf "\nMandatory options :\n"
+	printf "\t-f, --input-dir    : Path of the file(s) to analyse. 
+                             fastq and fasta are accepted ;\n\n"
+
+    printf "\t-d, --data         : References data to use to rotate sequence(s)
+                             Available :
+                             - hpv16 
+                             - hpv11
+                             - hpv6
+                             For available data, the reference genome was chosen
+                             on PaVE and the reference gene used is e6 ORF.
+                             If you want to use your own data, create a
+                             directory into data and add a reference genome and
+                             a reference gene. Make sure that the name is
+                             '*genome.fasta' and '*gene.fasta' ;\n\n"
+	
+    printf "\t-o, --output-dir   : Path of the output directory where results will 
+                             be written. If the directory doesn't exist,
+                             it will be created ;\n"
+    
+    printf "\nSupplementary options :\n"
+    printf "\t-t, --files-type   : Type of file(s) to analyse. 
+                             Default fasta ;\n\n"
+
+    printf "\t-h                 : Help ;\n" 
+
+    printf "\nExample :\n"
+    printf "/home/user/ViRotator/ViRotator -f /home/user/dir_of_data_to_analyse -d hpv16 -t fastq -o /home/user/data_rotated\n"
+}
+
+# Print usage if there is just the name of the script in command line
+if [ $# -eq 0 ]
+then
+	usage
+	exit
+fi
+
+# Read the options (":" after an argument (i.e f and p) --> argument requiered value, nothing after an argument (i.e m and h) --> argument don't requiered value)
+TEMP=`getopt -o f:t:d:o:h --long input-dir:,files-type:,data:,output-dir:,help -- "$@"`
+eval set -- "$TEMP"
+
+# Extract options and their arguments into variables
+while true
+do
+	case $1 in
+		-f|--input-dir)
+			INPUTDIR=$2; shift 2;;
+		-t|--files-type)
+			FILESTYPE=$2; shift 2;;
+		-d|--data)
+			DATA=$2; shift 2;;
+		-o|--output-dir)
+			OUTPUTDIR=$2; shift 2;;
+		-h|--help) usage;
+			exit 0;;
+		--) shift; break;;
+		*) break;;
+	esac
+done
+
+
+
+########################################################################################
+#                                    VERIFICATION
+########################################################################################
+
+### CHECK IF MANDATORY ARGUMENTS ARE NOT NULL
+if [ -z "$INPUTDIR" ] || [ -z "$OUTPUTDIR" ] || [ -z "$DATA" ]
+then
+    echo -e "ViRotator : warning : You must enter all the mandatory arguments"
+    echo -e "Use \"ViRotator --help\" to see all command-line options."
+fi
+
+
+### CHECK IF THE INPUT FILES DIRECTORY EXISTS
+if [ ! -d "$INPUTDIR" ]
+then
+	echo -e "ViRotator : error : The input file directory ${INPUTDIR} doesn't exist"
+	exit
+fi
+
+
+### CHECK IF THE USER ENTER THE RIGHT SYNTHAX FOR THE OPTIONNAL ARGUMENTS 
+# Files type
+if [[ "$FILESTYPE" != "fasta" && "$FILESTYPE" != "fastq" ]]
+then 
+	echo -e "ViRotator : warning : You have to write fasta or fastq for the -t option"
+	exit
+fi
+
+
+### CHECK IF THE DATA DIRECTORY EXISTS AND IF NAMES OF DATA FILES ARE CORRECT
+# Directory
+if [ ! -d "$DIRDATA/$DATA" ]
+then
+	echo -e "ViRotator : error : The data directory ${DATA} doesn't exist"
+	exit
+fi
+# Files
+if [ ! -f "$DIRDATA/$DATA"/*genome.fasta ]
+then
+	echo -e "ViRotator : error : The reference file *genome.fasta doesn't exist in the data directory"
+	exit
+fi
+if [ ! -f "$DIRDATA/$DATA"/*gene.fasta ]
+then
+	echo -e "ViRotator : error : The reference file *gene.fasta doesn't exist in the data directory"
+	exit
+fi
+
+
+### CHECK IF THERE IS AT LEAST ONE FASTA FILE OR FASTQ FILE INTO THE DIRECTORY
+if [ "$FILESTYPE" == "fasta" ]
+then 
+	NBFASTAFILE=`ls -1 "$INPUTDIR"/*.f*a 2>/dev/null | wc -l`
+	if [ $NBFASTAFILE = 0 ]
+	then 
+		echo -e "ViRotator : error : There is no FASTA file into the directory ${INPUTDIR}"
+		exit
+	fi 
+elif [ "$FILESTYPE" == "fastq" ]
+then 
+	NBFASTQFILE=`ls -1 "$INPUTDIR"/*.f*q 2>/dev/null | wc -l`
+
+	if [ $NBFASTQFILE = 0 ]
+	then 
+		echo -e "ViRotator : error : There is no FASTQ file into the directory ${INPUTDIR}"
+		exit
+	fi 
+fi
+
+
+# PRINT HEADER AND COMMAND LINE AFTER ALL VERIFICATION ARE OK 
+header
+echo -e "\nViRotator : Start with the command-line :"
+echo -e "$(dirname $0)/ViRotator -f ${INPUTDIR} -o ${OUTPUTDIR} -t ${FILESTYPE} -d ${DATA}\n"
+
+
+
+########################################################################################
+#                                    CREATION
+########################################################################################
+
+### CREATE OUTPUT DIR IF DOESN'T EXIST
+mkdir -p "$OUTPUTDIR"
+mkdir -p "$OUTPUTDIR"/tmp
+mkdir -p "$OUTPUTDIR"/output
+mkdir -p "$OUTPUTDIR"/log
+
+
+### CREATE AN ARRAY WITH ALL NAMES OF THE INPUT FILES 
+declare -a FILES_NAMES
+if [ "$FILESTYPE" == "fasta" ]
+then 
+	PATHOFFILES="$INPUTDIR"/*.f*a
+fi
+if [ "$FILESTYPE" == "fastq" ]
+then 
+	# Keep the directory path of FASTQ files
+	ORIGINALINPUTDIRFASTQ="$INPUTDIR"
+	PATHOFFILES="$INPUTDIR"/*.f*q
+fi
+for file in $PATHOFFILES
+	do
+		file_without_path=${file##*/}
+		file_without_extension=${file_without_path%.f*}
+		FILES_NAMES+=("$file_without_extension")
+	done
+
+# Sort the array alphanumerically
+IFS=$'\n' FILES_NAMES=($(sort -d <<<"${FILES_NAMES[*]}"))
+unset IFS	
+
+
+
+########################################################################################
+#                                    ROTATION
+########################################################################################
+
+for file_name in ${FILES_NAMES[@]}
+	do 
+		echo -e "------------------------$file_name--------------------------"
+		
+		### CONVERT
+		if [ "$FILESTYPE" == "fastq" ]
+		then
+			echo -e "\n*---------- CONVERT INTO FASTA FILE"
+			sed -n '1~4s/^@/>/p;2~4p' "$INPUTDIR"/"$file_name".f*q > "$OUTPUTDIR"/output/"$file_name".fasta
+			INPUTDIR="$OUTPUTDIR"/output
+		fi
+
+		### RUN BLAST
+		echo -e "\n*---------- IDENTIFICATION OF THE STRAND FOR EACH SEQUENCES"
+		blastn -query "$INPUTDIR"/"$file_name".f*a -subject "$DIRDATA"/"$DATA"/*genome.fasta -outfmt "6 qseqid sstrand" > "$OUTPUTDIR"/tmp/"$file_name""_strand.txt"
+		# If input files are FASTQ, redefine directory file before reverse complement on FASTQ file and remove FASTA file create to know the strand
+		if [ "$FILESTYPE" == "fastq" ]
+		then
+			rm "$INPUTDIR"/"$file_name".fasta
+			INPUTDIR="$ORIGINALINPUTDIRFASTQ"
+		fi
+
+		### REVERSE COMPLEMENT
+		echo -e "\n*---------- REVERSE COMPLEMENT SEQUENCES ON THE MINUS STRAND"
+		python3 "$DIRSCRIPTS"/rev_comp.py --input_file "$INPUTDIR"/"$file_name".f* --file_type "$FILESTYPE" --blast_file "$OUTPUTDIR"/tmp/"$file_name""_strand.txt" --output_file "$OUTPUTDIR"/output/"$file_name""_revcomp"."$FILESTYPE" --output_log "$OUTPUTDIR"/log/"$file_name".log
+		# Remove useless blast file
+		rm "$OUTPUTDIR"/tmp/"$file_name""_strand.txt"
+
+		### TRIPLE SEQUENCES
+		echo -e "\n*---------- PREPARE SEQUENCES FOR ROTATION"
+		python3 "$DIRSCRIPTS"/triple.py --input_file "$OUTPUTDIR"/output/"$file_name""_revcomp"."$FILESTYPE" --file_type "$FILESTYPE" --output_file "$OUTPUTDIR"/output/"$file_name""_revcomp_tripled"."$FILESTYPE" 
+		# Remove reverse complement file
+		rm "$OUTPUTDIR"/output/"$file_name""_revcomp"."$FILESTYPE"
+		# If input files are FASTQ, the new FASTQ with sequences reverse complemented and tripled is reconverted to FASTA file before the new Blast
+		if [ "$FILESTYPE" == "fastq" ]
+		then
+			echo -e "\n*---------- CONVERT FILE PREPARED INTO FASTA FILE"
+			sed -n '1~4s/^@/>/p;2~4p' "$OUTPUTDIR"/output/"$file_name""_revcomp_tripled"."$FILESTYPE" > "$OUTPUTDIR"/output/"$file_name""_revcomp_tripled".fasta
+		fi
+
+		### RUN BLAST
+		echo -e "\n*---------- SEARCH START POSITIONS FOR ROTATION"
+		blastn -query "$OUTPUTDIR"/output/"$file_name""_revcomp_tripled".f*a -subject "$DIRDATA"/"$DATA"/*gene.fasta -outfmt "6 qseqid qstart" -strand plus > "$OUTPUTDIR"/tmp/"$file_name""_pos_gene.txt"
+		# Remove FASTA file created especially to run blast
+		if [ "$FILESTYPE" == "fastq" ]
+		then
+			rm "$OUTPUTDIR"/output/"$file_name""_revcomp_tripled".fasta
+		fi
+
+		### ROTATION
+		echo -e "\n*---------- ROTATE SEQUENCES"
+		python3 "$DIRSCRIPTS"/rotate.py --input_file "$OUTPUTDIR"/output/"$file_name""_revcomp_tripled"."$FILESTYPE" --file_type "$FILESTYPE" --blast_file "$OUTPUTDIR"/tmp/"$file_name""_pos_gene.txt" --output_file "$OUTPUTDIR"/output/"$file_name"."$FILESTYPE" --output_log "$OUTPUTDIR"/log/"$file_name".log
+		# Remove file with reads tripled
+		rm "$OUTPUTDIR"/output/"$file_name""_revcomp_tripled"."$FILESTYPE"
+		# Remove useless blast file
+		rm "$OUTPUTDIR"/tmp/"$file_name""_pos_gene.txt"
+		
+		echo -e "------------------------------------------------------------"
+	done
+
+# Add first line to the text file containing number reads rejected
+sed -i '1 i\SAMPLE\tNUMBER_SEQUENCES_WO_GENE' "$OUTPUTDIR"/log/rejected.count.txt
+
+# Remove Blast dir
+rm -r "$OUTPUTDIR"/tmp
