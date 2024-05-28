@@ -1,0 +1,44 @@
+name: ViRotator
+channels:
+  - anaconda
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - _libgcc_mutex=0.1=main
+  - _openmp_mutex=5.1=1_gnu
+  - blast=2.5.0=hc0b0e79_3
+  - boost=1.74.0=py310h7c3ba0c_5
+  - boost-cpp=1.74.0=hc6e9bd1_3
+  - bzip2=1.0.8=h7b6447c_0
+  - ca-certificates=2022.12.7=ha878542_0
+  - certifi=2022.12.7=pyhd8ed1ab_0
+  - icu=68.2=h9c3ff4c_0
+  - ld_impl_linux-64=2.38=h1181459_1
+  - libblas=3.9.0=15_linux64_openblas
+  - libcblas=3.9.0=15_linux64_openblas
+  - libffi=3.3=he6710b0_2
+  - libgcc-ng=11.2.0=h1234567_1
+  - libgfortran-ng=12.2.0=h69a702a_19
+  - libgfortran5=12.2.0=h337968e_19
+  - libgomp=11.2.0=h1234567_1
+  - liblapack=3.9.0=15_linux64_openblas
+  - libopenblas=0.3.20=pthreads_h78a6416_0
+  - libstdcxx-ng=11.2.0=h1234567_1
+  - libuuid=1.0.3=h7f8727e_2
+  - lz4-c=1.9.3=h9c3ff4c_1
+  - ncurses=6.3=h5eee18b_3
+  - numpy=1.22.3=py310h4ef5377_2
+  - openssl=1.1.1q=h7f8727e_0
+  - pip=22.1.2=py310h06a4308_0
+  - python=3.10.4=h12debd9_0
+  - python_abi=3.10=2_cp310
+  - readline=8.1.2=h7f8727e_1
+  - setuptools=61.2.0=py310h06a4308_0
+  - sqlite=3.39.2=h5082296_0
+  - tk=8.6.12=h1ccaba5_0
+  - tzdata=2022a=hda174b7_0
+  - wheel=0.37.1=pyhd3eb1b0_0
+  - xz=5.2.5=h7f8727e_1
+  - zlib=1.2.12=h7f8727e_2
+  - zstd=1.4.9=ha95c52a_0
