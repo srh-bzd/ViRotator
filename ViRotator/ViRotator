@@ -309,7 +309,7 @@ for file_name in ${FILES_NAMES[@]}
 	done
 
 # Add first line to the text file containing number reads rejected
-sed -i '1 i\SAMPLE\tNUMBER_SEQUENCES_WO_GENE' "$OUTPUTDIR"/log/rejected.count.txt
+sed -i '1 i\SAMPLE\tNUMBER_SEQUENCES_WO_GENE'\tNUMBER_SEQUENCES_LESS_GENE "$OUTPUTDIR"/log/rejected.count.txt
 
 # Remove Blast dir
 rm -r "$OUTPUTDIR"/tmp
