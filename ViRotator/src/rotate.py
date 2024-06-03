@@ -75,22 +75,25 @@ def rotate(fileDict, blastDict, file_type):
     Rotate sequences according on the 2nd and 3rd starting position of the discovered gene in the ordered list.
     """
     idNotBlast = list()
+    idLessBlast = list()
     for seqId in fileDict:
-        if seqId in blastDict:
+        if seqId in blastDict and len(blastDict[seqId]["pos"]) == 3:
             blastDict[seqId]["pos"].sort()
             start2 = blastDict[seqId]["pos"][1] - 1 # Minus 1 because Blast positions are on one base or Python in zero base
             start3 = blastDict[seqId]["pos"][2] - 1
             fileDict[seqId]["seq"] = fileDict[seqId]["seq"][start2:start3]
             if file_type == "fastq":
                 fileDict[seqId]["qual"] = fileDict[seqId]["qual"][start2:start3]
+        elif seqId in blastDict and len(blastDict[seqId]["pos"]) < 3:
+            idLessBlast.append(seqId)
         else:
             idNotBlast.append(seqId)
     for seqId in idNotBlast:
         fileDict.pop(seqId, None)
-    return fileDict, idNotBlast
+    return fileDict, idLessBlast, idNotBlast
 
 
-def write_output_files(newFileDict, idNotBlast, file_type, output_file, output_log):
+def write_output_files(newFileDict, idNotBlast, idLessBlast, file_type, output_file, output_log):
     """
     Write the new FASTA or FASTQ file with all the sequences rotate 
     and the log file with all id of sequences where position of gene was not find.
@@ -109,8 +112,10 @@ def write_output_files(newFileDict, idNotBlast, file_type, output_file, output_l
     outputName = os.path.splitext(outputName)[0]
     print("\n*---------- Sequences where position of the gene for rotation was not find ("+str(len(idNotBlast))+") : ", file=output_log)
     print("\n".join(idNotBlast), file=output_log)
+    print("\n*---------- Sequences where position of the gene for rotation was find but less than three times ("+str(len(idLessBlast))+") : ", file=output_log)
+    print("\n".join(idLessBlast), file=output_log)
     with open(outputPath+"/rejected.count.txt", "a") as output_count:
-        print(outputName+"\t"+str(len(idNotBlast)), file=output_count)
+        print(outputName+"\t"+str(len(idNotBlast))+"\t"+str(len(idLessBlast)), file=output_count)
 
 
 
@@ -128,5 +133,5 @@ if __name__ == "__main__":
     elif args.file_type == "fastq" : 
         file_dict = parse_fastq(args.input_file)
     blast_dict = parse_blast_file(args.blast_file)
-    new_file_dict, id_seq_not_blast = rotate(file_dict, blast_dict, args.file_type)
-    write_output_files(new_file_dict, id_seq_not_blast, args.file_type, args.output_file, args.output_log)
+    new_file_dict, id_seq_less_blast, id_seq_not_blast = rotate(file_dict, blast_dict, args.file_type)
+    write_output_files(new_file_dict, id_seq_not_blast, id_seq_less_blast, args.file_type, args.output_file, args.output_log)
