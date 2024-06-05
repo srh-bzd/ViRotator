@@ -58,7 +58,7 @@ function header(){
 
 ### USAGE OF THE PIPELINE
 function usage(){
-    headern 
+    header 
     printf "\nUsage :\n"
 	printf "./ViRotator -f <input_directory> -d <data> -o <output_directory> [-t <files-type>]\n"
     
